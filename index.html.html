@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulls & Cows: Ultimate Betting</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #f59e0b; --text: #f8fafc; --win: #22c55e; --lose: #ef4444; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        
+        .game-container { background: var(--card); padding: 2rem; border-radius: 24px; width: 95%; max-width: 900px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        
+        .wallet-box { background: #064e3b; color: #10b981; padding: 12px 25px; border-radius: 50px; display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.4rem; margin-bottom: 20px; border: 2px solid #059669; }
+
+        .guess-box { background: #0f172a; padding: 1rem; border-radius: 15px; text-align: center; font-size: 2.2rem; letter-spacing: 8px; color: var(--primary); margin-bottom: 1rem; border: 2px dashed #334155; height: 60px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        
+        .number-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 15px 0; }
+        .num-btn { background: #334155; border: none; color: white; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 1.2rem; transition: 0.2s; }
+        .num-btn.excluded { opacity: 0.15; text-decoration: line-through; background: #000; color: var(--lose); }
+
+        .history-card { background: #0f172a; border-radius: 15px; padding: 1rem; height: 400px; overflow-y: auto; border: 1px solid #334155; }
+        .history-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; }
+        
+        .setup-group { margin-bottom: 15px; }
+        .setup-group label { display: block; font-size: 0.85rem; margin-bottom: 5px; opacity: 0.8; color: var(--primary); }
+        
+        .input-bet { background: #0f172a; border: 2px solid #334155; color: white; padding: 10px; border-radius: 10px; width: 100%; font-size: 1rem; text-align: center; box-sizing: border-box; outline: none; }
+        .input-bet:focus { border-color: var(--primary); }
+        
+        .btn-action { background: var(--primary); color: #000; border: none; padding: 16px; border-radius: 12px; width: 100%; cursor: pointer; font-weight: bold; text-transform: uppercase; margin-top: 10px; font-size: 1rem; transition: 0.3s; }
+        .btn-action:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        
+        .btn-save { background: #3b82f6; color: white; }
+
+        #recoveryZone { margin-top: 20px; background: #450a0a; padding: 15px; border-radius: 15px; border: 1px solid var(--lose); text-align: center; animation: shake 0.5s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+        @media (max-width: 768px) { .game-container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body onload="checkSavedGame()">
+
+<div class="game-container">
+    <div class="left-section">
+        <div class="wallet-box">💰 <span id="balanceDisplay">100</span> Coins</div>
+        
+        <div id="setup">
+            <h2 style="margin-top:0">🛠️ गेम सेटिंग्स</h2>
+            
+            <div class="setup-group">
+                <label>दांव (Bet):</label>
+                <input type="number" id="betAmount" class="input-bet" value="20" min="1">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="setup-group" style="flex:1">
+                    <label>अंक (Digits):</label>
+                    <select id="digitsCount" class="input-bet">
+                        <option value="3">3</option>
+                        <option value="4" selected>4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <div class="setup-group" style="flex:1">
+                    <label>चांस (Chances):</label>
+                    <select id="chancesCount" class="input-bet">
+                        <option value="8">8</option>
+                        <option value="10" selected>10</option>
+                        <option value="12">12</option>
+                        <option value="15">15</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="startBtn" class="btn-action" onclick="startGame()">चैलेंज शुरू करें</button>
+            <div id="recoveryZone" style="display: none;">
+                <p style="color:#fca5a5; margin-bottom:10px;">खजाना खाली! बैंक से मदद लें?</p>
+                <button class="btn-action" style="background:var(--win); color:white;" onclick="getFreeCoins()">मुफ्त 50 सिक्के लें</button>
+            </div>
+        </div>
+
+        <div id="gamePlay" style="display:none">
+            <div style="display:flex; justify-content: space-between; margin-bottom:10px; font-weight:bold; font-size:0.9rem;">
+                <span>बाज़ी: <span id="activeBet" style="color:var(--primary)">0</span></span>
+                <span>बचे चांस: <span id="lives" style="color:var(--lose)">0</span></span>
+            </div>
+            <div class="guess-box" id="display">_ _ _ _</div>
+            <div class="number-grid" id="grid"></div>
+            <button class="btn-action" id="checkBtn" onclick="checkGuess()">Check Guess</button>
+            <button class="btn-action" style="background:#475569; color:white; margin-top:5px; padding: 10px; font-size: 0.8rem;" onclick="clearInput()">Clear</button>
+            
+            <button class="btn-action btn-save" onclick="saveGame()">💾 गेम सेव करें</button>
+        </div>
+        <div id="msg" style="margin-top: 20px; font-weight: bold; text-align: center;"></div>
+    </div>
+
+    <div class="right-section">
+        <h3 style="margin-top:0">📜 इतिहास (Game Log)</h3>
+        <div class="history-card" id="history">
+            <p style="text-align:center; opacity:0.3; margin-top:40%;">अपनी रणनीति चुनें और शुरू करें</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let secret = "";
+    let currentGuess = "";
+    let len = 4;
+    let tries = 0;
+    let maxTries = 10;
+    let balance = 100;
+    let currentBet = 0;
+    let isInGame = false;
+
+    // गेम लोड होते ही चेक करें कि क्या कोई पुराना गेम सेव है
+    function checkSavedGame() {
+        const savedData = localStorage.getItem('bullsAndCowsSave');
+        if (savedData) {
+            if (confirm("पुराना गेम मिला! क्या आप इसे जारी (Continue) रखना चाहते हैं?")) {
+                loadGame(JSON.parse(savedData));
+            } else {
+                localStorage.removeItem('bullsAndCowsSave');
+                updateBalance();
+            }
+        } else {
+            updateBalance();
+        }
+    }
+
+    function saveGame() {
+        if (!isInGame) return;
+        const gameState = {
+            secret,
+            len,
+            tries,
+            maxTries,
+            balance,
+            currentBet,
+            history: document.getElementById('history').innerHTML
+        };
+        localStorage.setItem('bullsAndCowsSave', JSON.stringify(gameState));
+        alert("गेम सेव हो गया है! आप इसे बाद में जारी रख सकते हैं।");
+    }
+
+    function loadGame(data) {
+        secret = data.secret;
+        len = data.len;
+        tries = data.tries;
+        maxTries = data.maxTries;
+        balance = data.balance;
+        currentBet = data.currentBet;
+        isInGame = true;
+
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('gamePlay').style.display = 'block';
+        document.getElementById('activeBet').innerText = currentBet;
+        document.getElementById('lives').innerText = maxTries - tries;
+        document.getElementById('history').innerHTML = data.history;
+        
+        updateBalance();
+        createGrid();
+        updateDisplay();
+    }
+
+    function startGame() {
+        let betInput = document.getElementById('betAmount');
+        currentBet = parseInt(betInput.value);
+
+        if (currentBet > balance || currentBet <= 0 || isNaN(currentBet)) {
+            alert("उतनी ही बाजी लगाओ जितने सिक्के हों!");
+            return;
+        }
+
+        balance -= currentBet;
+        updateBalance();
+        
+        len = parseInt(document.getElementById('digitsCount').value);
+        maxTries = parseInt(document.getElementById('chancesCount').value);
+        
+        let nums = "0123456789".split("").sort(() => Math.random() - 0.5);
+        secret = nums.slice(0, len).join("");
+        
+        isInGame = true;
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('gamePlay').style.display = 'block';
+        document.getElementById('activeBet').innerText = currentBet;
+        document.getElementById('lives').innerText = maxTries;
+        document.getElementById('msg').innerText = "";
+        
+        tries = 0;
+        currentGuess = "";
+        document.getElementById('history').innerHTML = "";
+        createGrid();
+        updateDisplay();
+    }
+
+    function createGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = "";
+        for(let i=0; i<=9; i++) {
+            const b = document.createElement('button');
+            b.className = 'num-btn';
+            b.innerText = i;
+            b.onclick = () => { 
+                if(currentGuess.length < len && !currentGuess.includes(i.toString())) { 
+                    currentGuess += i; 
+                    updateDisplay(); 
+                } 
+            };
+            b.oncontextmenu = (e) => { 
+                e.preventDefault(); 
+                b.classList.toggle('excluded'); 
+            };
+            grid.appendChild(b);
+        }
+    }
+
+    function clearInput() {
+        currentGuess = "";
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        document.getElementById('display').innerText = currentGuess.padEnd(len, "_").split("").join(" ");
+    }
+
+    function updateBalance() {
+        document.getElementById('balanceDisplay').innerText = balance;
+        if (balance <= 0) {
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('recoveryZone').style.display = 'block';
+        } else {
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('recoveryZone').style.display = 'none';
+        }
+    }
+
+    function getFreeCoins() {
+        balance = 50;
+        updateBalance();
+        document.getElementById('msg').innerText = "🏦 बैंक ने आपको 50 सिक्के उधार दिए!";
+        document.getElementById('msg').style.color = "#10b981";
+        setTimeout(() => document.getElementById('msg').innerText = "", 3000);
+    }
+
+    function checkGuess() {
+        if(currentGuess.length !== len) return;
+        tries++;
+        let b = 0, c = 0;
+        for(let i=0; i<len; i++) {
+            if(currentGuess[i] === secret[i]) b++;
+            else if(secret.includes(currentGuess[i])) c++;
+        }
+
+        let remaining = maxTries - tries;
+        document.getElementById('lives').innerText = remaining;
+
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        row.innerHTML = `<span>#${tries}</span> <b>${currentGuess}</b> <span style="color:var(--primary)">🎯${b} 🐮${c}</span>`;
+        document.getElementById('history').prepend(row);
+
+        if(b === len) {
+            let bonusRatio = remaining / maxTries;
+            let profit = Math.floor(currentBet * bonusRatio);
+            let winTotal = currentBet + profit; 
+            
+            balance += winTotal;
+            updateBalance();
+            localStorage.removeItem('bullsAndCowsSave'); // जीत के बाद सेव डेटा हटा दें
+            endGame(`🏆 जीत! वापसी: ${winTotal} सिक्के। (मुनाफा: ${profit})`, true);
+        } else if (tries >= maxTries) {
+            updateBalance();
+            localStorage.removeItem('bullsAndCowsSave'); // हार के बाद सेव डेटा हटा दें
+            endGame(`💀 हार गए! सही नंबर ${secret} था।`, false);
+        }
+
+        currentGuess = "";
+        updateDisplay();
+    }
+
+    function endGame(msg, isWin) {
+        isInGame = false;
+        document.getElementById('checkBtn').disabled = true;
+        document.getElementById('msg').innerText = msg;
+        document.getElementById('msg').style.color = isWin ? "var(--win)" : "var(--lose)";
+        if(isWin) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+
+        setTimeout(() => {
+            document.getElementById('setup').style.display = 'block';
+            document.getElementById('gamePlay').style.display = 'none';
+            document.getElementById('checkBtn').disabled = false;
+        }, 4000);
+    }
+</script>
+</body>
+</html>
